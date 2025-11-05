@@ -4,8 +4,8 @@ CUDA_VISIBLE_DEVICES=$2 MAX_PIXELS=602112 \
   --fed_alg fedavg\
   --client_num 30 \
   --client_sample 5 \
-  --model_type Qwen2.5-1.5B-Base-think \
-  --model_id_or_path /home/hmpiao/hmpiao/Qwen2.5-1.5B-Base-think \
+  --model_type qwen2_5-7b-instruct \
+  --model_id_or_path /home/hmpiao/hmpiao/Qwen2.5-7B-Instruct  \
   --check_model_is_latest False \
   --lazy_tokenize True \
   --preprocess_num_proc 4 \

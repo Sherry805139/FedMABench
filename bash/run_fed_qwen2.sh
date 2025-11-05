@@ -9,7 +9,7 @@ CUDA_VISIBLE_DEVICES=$2 MAX_PIXELS=602112 \
   --check_model_is_latest False \
   --lazy_tokenize True \
   --preprocess_num_proc 4 \
-  --dataset /home/hmpiao/adv_reason/Reasoning360/data/train/math__combined_54.4k.parquet \
+  --dataset /home/hmpiao/adv_reason/Reasoning360/data/train/math__combined_54.4k.jsonl \
   --sft_type lora \
   --tuner_backend peft \
   --dtype AUTO \

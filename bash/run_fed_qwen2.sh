@@ -4,12 +4,12 @@ CUDA_VISIBLE_DEVICES=$2 MAX_PIXELS=602112 \
   --fed_alg fedavg\
   --client_num 30 \
   --client_sample 5 \
-  --model_type qwen2-vl-7b-instruct \
-  --model_id_or_path /ailab/user/wangwenhao/.cache/modelscope/hub/qwen/Qwen2-VL-7B-Instruct \
+  --model_type Qwen2.5-1.5B-Base-think \
+  --model_id_or_path /home/hmpiao/hmpiao/Qwen2.5-1.5B-Base-think \
   --check_model_is_latest False \
   --lazy_tokenize True \
   --preprocess_num_proc 4 \
-  --dataset $1 \
+  --dataset /home/hmpiao/adv_reason/Reasoning360/data/train/math__combined_54.4k.parquet \
   --sft_type lora \
   --tuner_backend peft \
   --dtype AUTO \

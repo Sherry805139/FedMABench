@@ -3958,8 +3958,20 @@ def get_model_tokenizer_qwen2_vl(model_dir: str,
     model, tokenizer = get_model_tokenizer_with_flash_attn(model_dir, torch_dtype, model_kwargs, load_model, **kwargs)
     tokenizer.processor = processor
     if model is not None:
-        model.model.embed_tokens.register_forward_hook(_clone_hook)
-        model.model.embed_tokens.register_forward_hook(_output_device_map_hook)
+        # Locate token embedding module robustly across transformers versions
+        embed_module = None
+        try:
+            if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
+                embed_module = model.model.embed_tokens
+            elif hasattr(model, 'language_model') and hasattr(model.language_model, 'model') and hasattr(model.language_model.model, 'embed_tokens'):
+                embed_module = model.language_model.model.embed_tokens
+            elif hasattr(model, 'embed_tokens'):
+                embed_module = model.embed_tokens
+        except Exception:
+            embed_module = None
+        if embed_module is not None:
+            embed_module.register_forward_hook(_clone_hook)
+            embed_module.register_forward_hook(_output_device_map_hook)
     return model, tokenizer
 
 

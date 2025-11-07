@@ -425,12 +425,21 @@ class SwiftMixin:
         if self.args.should_save:
             self._rotate_checkpoints(use_mtime=True, output_dir=run_dir)
 
-    def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
-        train_sampler_random = self.args.train_sampler_random
-        if train_sampler_random:
-            return super()._get_train_sampler()
-        else:
-            return self._get_eval_sampler(self.train_dataset)
+    def _get_train_sampler(self, dataset=None):
+        """Compat with HF Trainer which may call sampler_fn(dataset)."""
+        train_sampler_random = getattr(self.args, 'train_sampler_random', True)
+        try:
+            if train_sampler_random:
+                return super()._get_train_sampler(dataset)
+            else:
+                ds = dataset if dataset is not None else self.train_dataset
+                return self._get_eval_sampler(ds)
+        except TypeError:
+            # Fallback for older HF versions without dataset param
+            if train_sampler_random:
+                return super()._get_train_sampler()
+            else:
+                return self._get_eval_sampler(self.train_dataset)
 
     def _load_from_checkpoint(self, resume_from_checkpoint: str, model=None) -> None:
         if model is None:

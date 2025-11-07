@@ -812,7 +812,17 @@ def llm_sft(args: SftArguments) -> None:
     indices = list(range(len(train_dataset)))
 
     def read_json(path):
-        with open(path, 'r', encoding="utf-8") as f:
+        # Support both JSON (array) and JSONL (one json object per line)
+        if path.endswith('.jsonl'):
+            items = []
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    items.append(json.loads(line))
+            return items
+        with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return data
 

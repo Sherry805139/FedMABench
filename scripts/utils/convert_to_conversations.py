@@ -75,14 +75,31 @@ def build_user_value(instruction: str, image_count: int, image_tag: str = '<imag
     return instruction or ''
 
 
-def convert_record(d: Dict[str, Any]) -> Dict[str, Any]:
+def _remap_images(images: List[str], image_prefix_src: str = None, image_prefix_dst: str = None,
+                  image_root: str = None) -> List[str]:
+    remapped: List[str] = []
+    for p in images:
+        new_p = p
+        if image_prefix_src and image_prefix_dst and isinstance(new_p, str) and new_p.startswith(image_prefix_src):
+            new_p = image_prefix_dst + new_p[len(image_prefix_src):]
+        if image_root and isinstance(new_p, str) and not os.path.isabs(new_p):
+            new_p = os.path.join(image_root, new_p)
+        remapped.append(new_p)
+    return remapped
+
+
+def convert_record(d: Dict[str, Any], *, image_prefix_src: str = None, image_prefix_dst: str = None,
+                   image_root: str = None, drop_if_missing: bool = False) -> Dict[str, Any]:
     # images
     raw_images = d.get('imgs') or d.get('images') or []
     images: List[str] = raw_images if isinstance(raw_images, list) else [raw_images]
+    images = _remap_images(images, image_prefix_src, image_prefix_dst, image_root)
+    existing_images = [p for p in images if isinstance(p, str) and os.path.exists(p)] if images else []
 
     # instruction + images => user
     instruction: str = d.get('instruction') or ''
-    user_value = build_user_value(instruction, len(images))
+    # Prefer counting existing images when deciding how many <image> tags to place
+    user_value = build_user_value(instruction, len(existing_images) if existing_images else len(images))
 
     # response: prefer acts_convert, else acts_origin summary
     if d.get('acts_convert'):
@@ -98,8 +115,12 @@ def convert_record(d: Dict[str, Any]) -> Dict[str, Any]:
     ]
 
     out: Dict[str, Any] = {'conversations': conversations}
-    if images:
-        out['images'] = images
+    # Keep only files that actually exist, unless user wants to keep raw paths
+    if existing_images:
+        out['images'] = existing_images
+    elif images and drop_if_missing:
+        # Mark as invalid by returning empty dict; caller will filter
+        return {}
 
     # keep useful meta fields
     for meta_key in ('episode_id', 'client_number'):
@@ -109,7 +130,8 @@ def convert_record(d: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def convert_file(input_path: str, output_path: str) -> Tuple[int, int]:
+def convert_file(input_path: str, output_path: str, *, image_prefix_src: str = None, image_prefix_dst: str = None,
+                 image_root: str = None, drop_if_missing: bool = False) -> Tuple[int, int]:
     if input_path.endswith('.jsonl'):
         items = read_jsonl(input_path)
     elif input_path.endswith('.json'):
@@ -117,8 +139,23 @@ def convert_file(input_path: str, output_path: str) -> Tuple[int, int]:
     else:
         raise ValueError('Input must be .json or .jsonl')
 
-    converted: List[Dict[str, Any]] = [convert_record(x) for x in items]
+    converted: List[Dict[str, Any]] = []
+    dropped = 0
+    for x in items:
+        y = convert_record(
+            x,
+            image_prefix_src=image_prefix_src,
+            image_prefix_dst=image_prefix_dst,
+            image_root=image_root,
+            drop_if_missing=drop_if_missing,
+        )
+        if y:
+            converted.append(y)
+        else:
+            dropped += 1
     write_jsonl(output_path, converted)
+    if dropped:
+        print(f'Dropped {dropped} samples due to missing images.')
     return len(items), len(converted)
 
 
@@ -126,6 +163,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Convert dataset to conversations format for Qwen2-VL.')
     parser.add_argument('--input', required=True, help='Input file (.json/.jsonl) or directory')
     parser.add_argument('--output', required=True, help='Output file (.jsonl) or directory when input is a dir')
+    parser.add_argument('--image_prefix_src', default=None, help='Old absolute prefix to replace in image paths')
+    parser.add_argument('--image_prefix_dst', default=None, help='New absolute prefix to replace with')
+    parser.add_argument('--image_root', default=None, help='Join non-absolute image paths with this root')
+    parser.add_argument('--drop_if_missing', action='store_true', help='Drop samples if images not found locally')
     args = parser.parse_args()
 
     src = args.input
@@ -143,7 +184,14 @@ def main() -> None:
                 out_name = os.path.splitext(rel)[0] + '.jsonl'
                 out_path = os.path.join(dst, out_name)
                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                n_in, n_out = convert_file(in_path, out_path)
+                n_in, n_out = convert_file(
+                    in_path,
+                    out_path,
+                    image_prefix_src=args.image_prefix_src,
+                    image_prefix_dst=args.image_prefix_dst,
+                    image_root=args.image_root,
+                    drop_if_missing=args.drop_if_missing,
+                )
                 total_in += n_in
                 total_out += n_out
         print(f'Converted {total_in} -> {total_out} items across files.')
@@ -154,7 +202,14 @@ def main() -> None:
             out_path = os.path.join(dst, out_name)
         else:
             out_path = dst
-        n_in, n_out = convert_file(src, out_path)
+        n_in, n_out = convert_file(
+            src,
+            out_path,
+            image_prefix_src=args.image_prefix_src,
+            image_prefix_dst=args.image_prefix_dst,
+            image_root=args.image_root,
+            drop_if_missing=args.drop_if_missing,
+        )
         print(f'Converted {n_in} -> {n_out} items to {out_path}')
 
 

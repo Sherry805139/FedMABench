@@ -84,9 +84,26 @@ def dump_all_episodes(dataset, out_root_dir: Path):
     return episodes_step_instructions
 
 
-tfrecord_files = tf.io.gfile.glob(r'~/hmpiao/xuerong/FedMABench/android_control/android_control/*')
+# 解析数据目录并展开 ~，使用通配符匹配所有分片
+data_dir = Path(r'~/hmpiao/xuerong/FedMABench/android_control/android_control').expanduser()
+tfrecord_files = tf.io.gfile.glob(str(data_dir / '*'))
 tfrecord_files = sorted(tfrecord_files)[:20]
-# getTFRecordFormat(filenames)
-raw_dataset = tf.data.TFRecordDataset(tfrecord_files, compression_type='GZIP').as_numpy_iterator()
+print(f'[INFO] matched tfrecords: {len(tfrecord_files)} under {data_dir}')
+if not tfrecord_files:
+    raise FileNotFoundError(f'No TFRecord files matched under {data_dir}')
 
-ep_dict = dump_all_episodes(raw_dataset, Path(r'~/hmpiao/xuerong/FedMABench/android_control_unpack'))
+# 自动判断是否为 GZIP：检查文件魔数 0x1f 0x8b
+def _is_gzip(file_path: str) -> bool:
+    with tf.io.gfile.GFile(file_path, 'rb') as f:
+        return f.read(2) == b'\x1f\x8b'
+
+compression_type = 'GZIP' if _is_gzip(tfrecord_files[0]) else None
+print(f'[INFO] selected compression_type={compression_type}')
+
+# 构建数据集迭代器
+raw_dataset = tf.data.TFRecordDataset(tfrecord_files, compression_type=compression_type).as_numpy_iterator()
+
+# 输出根目录同样展开 ~ 并提前创建
+out_root = Path(r'~/hmpiao/xuerong/FedMABench/android_control_unpack').expanduser()
+out_root.mkdir(parents=True, exist_ok=True)
+ep_dict = dump_all_episodes(raw_dataset, out_root)

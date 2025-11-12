@@ -84,7 +84,7 @@ def dump_all_episodes(dataset, out_root_dir: Path):
     return episodes_step_instructions
 
 
-tfrecord_files = tf.io.gfile.glob(r'~/hmpiao/xuerong/FedMABench/android_control/android_control')
+tfrecord_files = tf.io.gfile.glob(r'~/hmpiao/xuerong/FedMABench/android_control/android_control/*')
 tfrecord_files = sorted(tfrecord_files)[:20]
 # getTFRecordFormat(filenames)
 raw_dataset = tf.data.TFRecordDataset(tfrecord_files, compression_type='GZIP').as_numpy_iterator()

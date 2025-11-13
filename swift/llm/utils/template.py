@@ -1528,7 +1528,12 @@ register_template(
 
 
 def _process_image_qwen(image):
-    from qwen_vl_utils.vision_process import IMAGE_FACTOR, MIN_PIXELS, MAX_PIXELS, smart_resize
+    from qwen_vl_utils.vision_process import MIN_PIXELS, MAX_PIXELS, smart_resize
+    try:
+        from qwen_vl_utils.vision_process import IMAGE_FACTOR
+    except ImportError:
+        # Fallback for older versions of qwen_vl_utils that don't have IMAGE_FACTOR
+        IMAGE_FACTOR = 16
     size_factor = get_env_args('image_factor', int, IMAGE_FACTOR, ['size_factor'])
     # resize
     resized_height = get_env_args('resized_height', int, None)

@@ -1642,13 +1642,57 @@ class _Qwen2VLTemplateMixin:
         return inputs, {}
 
     def _post_encode(self, model, data: Any) -> Dict[str, Any]:
-        _model = model.model
-        if not hasattr(_model, 'embed_tokens'):
-            _model = _model.model  # LoRA
+        # Try multiple paths to find embed_tokens for Qwen2-VL
+        # Handle PeftModel (LoRA) case first
+        if isinstance(model, PeftModel):
+            base_model = model.base_model
+            if hasattr(base_model, 'model') and hasattr(base_model.model, 'embed_tokens'):
+                embed_tokens = base_model.model.embed_tokens
+            elif hasattr(base_model, 'get_input_embeddings'):
+                embed_tokens = base_model.get_input_embeddings()
+            else:
+                raise AttributeError(
+                    f"Cannot find embed_tokens in PeftModel base_model. "
+                    f"Base model type: {type(base_model)}, has 'model': {hasattr(base_model, 'model')}"
+                )
+        else:
+            # Try different paths for regular model
+            embed_tokens = None
+            _model = model.model if hasattr(model, 'model') else model
+            
+            # Try different paths to locate embed_tokens
+            if hasattr(_model, 'embed_tokens'):
+                embed_tokens = _model.embed_tokens
+            elif hasattr(_model, 'model') and hasattr(_model.model, 'embed_tokens'):
+                embed_tokens = _model.model.embed_tokens
+            elif hasattr(model, 'get_input_embeddings'):
+                # Use get_input_embeddings as fallback
+                try:
+                    embed_tokens = model.get_input_embeddings()
+                except Exception:
+                    pass
+            
+            if embed_tokens is None:
+                # Last resort: try to access through model.model.model
+                try:
+                    if hasattr(model, 'model') and hasattr(model.model, 'model'):
+                        _model = model.model.model
+                        if hasattr(_model, 'embed_tokens'):
+                            embed_tokens = _model.embed_tokens
+                except Exception:
+                    pass
+            
+            if embed_tokens is None:
+                raise AttributeError(
+                    f"Cannot find embed_tokens in Qwen2-VL model. "
+                    f"Model structure: {type(model)}, has 'model': {hasattr(model, 'model')}, "
+                    f"has 'get_input_embeddings': {hasattr(model, 'get_input_embeddings')}"
+                )
+        
         input_ids = data['input_ids']
         pixel_values = data.get('pixel_values')
         pixel_values_videos = data.get('pixel_values_videos')
-        inputs_embeds = _model.embed_tokens(input_ids)
+        inputs_embeds = embed_tokens(input_ids)
         if pixel_values is None and pixel_values_videos is None:  # plain-text
             if is_deepspeed_enabled():
                 from PIL import Image

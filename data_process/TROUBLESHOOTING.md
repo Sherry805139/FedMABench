@@ -95,7 +95,27 @@ python scripts/utils/convert_to_conversations.py \
 ### 说明
 `get_rope_index` 是 Qwen2-VL 用于处理图像和视频 token 的特殊方法，用于计算正确的位置编码。如果方法不存在，使用标准的 `position_ids` 计算方式（`torch.arange`）作为后备方案，这在大多数情况下也能正常工作。
 
-## 错误 4: `KeyError: 'response'` (使用 conversations 格式数据时)
+## 错误 4: `AttributeError: 'Qwen2VLModel' object has no attribute 'embed_tokens'`
+
+### 问题描述
+在使用 LoRA 训练 Qwen2-VL 模型时，`_post_encode` 方法无法找到 `embed_tokens` 属性。这是因为：
+1. **LoRA 包装**：使用 PeftModel 包装后，模型结构变为 `PeftModel -> base_model -> model -> embed_tokens`
+2. **模型版本差异**：不同版本的 Qwen2-VL 模型可能有不同的内部结构
+3. **路径问题**：代码只尝试了简单的路径，没有处理所有可能的情况
+
+### 解决方案
+**已修复**：已在 `swift/llm/utils/template.py` 的 `_Qwen2VLTemplateMixin._post_encode` 方法中添加了完整的路径查找逻辑：
+- **PeftModel (LoRA) 情况**：优先检查 `model.base_model.model.embed_tokens`
+- **常规模型**：尝试多个路径：
+  - `model.model.embed_tokens`
+  - `model.model.model.embed_tokens`
+  - `model.get_input_embeddings()`（作为后备方案）
+- **错误信息**：如果都失败，会提供详细的错误信息帮助调试
+
+### 说明
+这不是模型版本的问题，而是代码需要处理不同的模型包装情况（特别是 LoRA）。修复后的代码会自动检测模型类型并选择正确的路径。
+
+## 错误 5: `KeyError: 'response'` (使用 conversations 格式数据时)
 
 ### 问题描述
 当使用 `conversations` 格式的数据时，数据集检查函数在预处理之前运行，此时数据还没有被转换成 `query` 和 `response` 格式，导致 `KeyError`。

@@ -1,12 +1,15 @@
 # 训练错误排查指南
 
-## 错误 1: `cannot import name 'IMAGE_FACTOR' from 'qwen_vl_utils.vision_process'`
+## 错误 1: `cannot import name 'IMAGE_FACTOR'/'MIN_PIXELS'/'MAX_PIXELS' from 'qwen_vl_utils.vision_process'`
 
 ### 问题描述
-`qwen_vl_utils` 的某些版本不包含 `IMAGE_FACTOR` 常量，导致导入失败。
+`qwen_vl_utils` 的某些版本不包含这些常量，导致导入失败。
 
 ### 解决方案
-**已修复**：已在 `swift/llm/utils/template.py` 中添加了兼容性处理，如果导入失败会使用默认值 `16`。
+**已修复**：已在 `swift/llm/utils/template.py` 中添加了兼容性处理：
+- `IMAGE_FACTOR`: 默认值 `16`
+- `MIN_PIXELS`: 默认值 `576`
+- `MAX_PIXELS`: 默认值 `1048576`
 
 如果问题仍然存在，可以尝试：
 ```bash
@@ -77,6 +80,26 @@ python scripts/utils/convert_to_conversations.py \
    - 先用 `max_length=8192` 尝试
    - 如果还有错误，逐步增加到 `16384` 或 `32768`
    - 注意：更大的 `max_length` 会占用更多显存
+
+## 错误 3: `KeyError: 'response'` (使用 conversations 格式数据时)
+
+### 问题描述
+当使用 `conversations` 格式的数据时，数据集检查函数在预处理之前运行，此时数据还没有被转换成 `query` 和 `response` 格式，导致 `KeyError`。
+
+### 解决方案
+**已修复**：已在 `swift/llm/utils/dataset.py` 的 `_check_dataset` 函数中添加了对 `conversations` 格式的支持。如果数据包含 `conversations` 字段，会跳过 `response` 字段的检查。
+
+### 验证
+确保你的数据格式正确：
+```json
+{
+  "conversations": [
+    {"from": "user", "value": "<image>\n任务目标"},
+    {"from": "assistant", "value": "动作描述"}
+  ],
+  "images": ["/path/to/image.png"]
+}
+```
 
 ## 其他常见问题
 

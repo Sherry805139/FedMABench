@@ -1,4 +1,5 @@
-CUDA_VISIBLE_DEVICES=$2 MAX_PIXELS=602112 \
+# Use $2 if provided, otherwise use environment variable CUDA_VISIBLE_DEVICES
+CUDA_VISIBLE_DEVICES=${2:-${CUDA_VISIBLE_DEVICES:-0}} MAX_PIXELS=602112 \
   swift sft \
   --round 30 \
   --round_per_epoch 10 \

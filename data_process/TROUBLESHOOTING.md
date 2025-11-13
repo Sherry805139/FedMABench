@@ -81,7 +81,21 @@ python scripts/utils/convert_to_conversations.py \
    - 如果还有错误，逐步增加到 `16384` 或 `32768`
    - 注意：更大的 `max_length` 会占用更多显存
 
-## 错误 3: `KeyError: 'response'` (使用 conversations 格式数据时)
+## 错误 3: `AttributeError: 'Qwen2VLForConditionalGeneration' object has no attribute 'get_rope_index'`
+
+### 问题描述
+某些版本的 Qwen2-VL 模型或 transformers 库可能不包含 `get_rope_index` 方法，导致在 `data_collator` 中调用失败。
+
+### 解决方案
+**已修复**：已在 `swift/llm/utils/template.py` 的 `_Qwen2VLTemplateMixin.data_collator` 方法中添加了兼容性处理：
+- 首先检查 `get_rope_index` 方法是否存在
+- 如果存在，使用该方法计算 `position_ids`
+- 如果不存在或调用失败，使用默认方式计算 `position_ids`（基于 `attention_mask`）
+
+### 说明
+`get_rope_index` 是 Qwen2-VL 用于处理图像和视频 token 的特殊方法，用于计算正确的位置编码。如果方法不存在，使用标准的 `position_ids` 计算方式（`torch.arange`）作为后备方案，这在大多数情况下也能正常工作。
+
+## 错误 4: `KeyError: 'response'` (使用 conversations 格式数据时)
 
 ### 问题描述
 当使用 `conversations` 格式的数据时，数据集检查函数在预处理之前运行，此时数据还没有被转换成 `query` 和 `response` 格式，导致 `KeyError`。

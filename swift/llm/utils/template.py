@@ -1687,9 +1687,26 @@ class _Qwen2VLTemplateMixin:
                 res[f'{media_type}_grid_thw'] = torch.concat(grid_thw)
         if 'input_ids' in res:
             # fix https://github.com/huggingface/transformers/pull/33487
-            position_ids, _ = self.model.get_rope_index(res['input_ids'], res.get('image_grid_thw'),
-                                                        res.get('video_grid_thw'), res['attention_mask'])
-            res['position_ids'] = position_ids.contiguous()
+            # Check if get_rope_index method exists (may not exist in some model versions)
+            if hasattr(self.model, 'get_rope_index'):
+                try:
+                    position_ids, _ = self.model.get_rope_index(res['input_ids'], res.get('image_grid_thw'),
+                                                                res.get('video_grid_thw'), res['attention_mask'])
+                    res['position_ids'] = position_ids.contiguous()
+                except AttributeError:
+                    # Fallback: use default position_ids calculation
+                    attention_mask = res.get('attention_mask', res['input_ids'] != self.tokenizer.pad_token_id)
+                    seq_len = attention_mask.sum(dim=-1)
+                    bs = res['input_ids'].shape[0]
+                    position_ids = torch.arange(attention_mask.shape[-1]).unsqueeze(0).long().repeat(bs, 1)
+                    res['position_ids'] = position_ids
+            else:
+                # Fallback: use default position_ids calculation
+                attention_mask = res.get('attention_mask', res['input_ids'] != self.tokenizer.pad_token_id)
+                seq_len = attention_mask.sum(dim=-1)
+                bs = res['input_ids'].shape[0]
+                position_ids = torch.arange(attention_mask.shape[-1]).unsqueeze(0).long().repeat(bs, 1)
+                res['position_ids'] = position_ids
         return res
 
     @staticmethod

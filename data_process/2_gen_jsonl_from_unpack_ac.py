@@ -237,20 +237,27 @@ def main():
     # 设置命令行参数解析
     parser = argparse.ArgumentParser(description="Process some episodes.")
     # 设置默认目录路径
-    default_data_dir = "/android_control_unpack_all"
+    default_data_dir = Path.home() / "hmpiao/xuerong/FedMABench/android_control_unpack"
     parser.add_argument(
         '--data_dir', 
         type=str, 
-        default=default_data_dir, 
+        default=str(default_data_dir), 
         help='The directory of the data to process. Default: "%(default)s"'
+    )
+    parser.add_argument(
+        '--max_episodes',
+        type=int,
+        default=None,
+        help='Maximum number of episodes to process. Default: process all'
     )
     args = parser.parse_args()
 
     # 使用命令行参数
     data_dir = Path(args.data_dir)
     # split = load_json('/remote-home/iot_liuguangyi/data/AndroidControl/splits.json')
-
-    process_episodes(data_dir, [i for i in range(40000)])
+    
+    episode_list = None if args.max_episodes is None else list(range(args.max_episodes))
+    process_episodes(data_dir, episode_list)
 
 
 if __name__ == '__main__':

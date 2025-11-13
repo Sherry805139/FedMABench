@@ -29,7 +29,10 @@ CUDA_VISIBLE_DEVICES=$2 MAX_PIXELS=602112 \
   --max_grad_norm 0.5 \
   --warmup_ratio 0.03 \
   --eval_strategy no \
-  --save_strategy no \
+  --save_strategy steps \
+  --save_steps 500 \
+  --save_total_limit 3 \
+  --save_only_model True \
   --logging_steps 100
 
 #  --custom_train_dataset_path /GPFS/data/wenhaowang-1/ms-swift/androidcontrol_1108/unpack-1109-test-message-vlm-train.jsonl \

@@ -21,7 +21,7 @@ MAX_PIXELS=400000 \
   --model_id_or_path /home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct \
   --lazy_tokenize True \
   --preprocess_num_proc 4 \
-  --dataset "$DATASET" \
+  --dataset "/home/hmpiao/hmpiao/xuerong/FedMABench/android_control_unpack/episode-wise-conversations.jsonl" \
   --sft_type lora \
   --tuner_backend peft \
   --dtype bf16 \

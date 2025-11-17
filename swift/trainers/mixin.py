@@ -383,7 +383,22 @@ class SwiftMixin:
                 self.deepspeed._zero3_consolidated_16bit_state_dict = MethodType(_zero3_consolidated_16bit_state_dict,
                                                                                  self.deepspeed)
         if version.parse(transformers.__version__) >= version.parse('4.36') or not self.args.save_only_model:
-            result = super()._save_checkpoint(model, trial, metrics)
+            # Check if parent class _save_checkpoint accepts metrics parameter
+            # Some Transformers versions don't accept metrics parameter
+            try:
+                parent_sig = inspect.signature(super()._save_checkpoint)
+                if 'metrics' in parent_sig.parameters:
+                    result = super()._save_checkpoint(model, trial, metrics)
+                else:
+                    # Older versions don't accept metrics parameter
+                    result = super()._save_checkpoint(model, trial)
+            except Exception:
+                # Fallback: try without metrics first (most common case)
+                try:
+                    result = super()._save_checkpoint(model, trial)
+                except TypeError:
+                    # If that fails, try with metrics (for newer versions)
+                    result = super()._save_checkpoint(model, trial, metrics)
         else:
             result = self._save_only_model(model, trial, metrics)
         logger.info(f'Saving model checkpoint to {self.state.last_model_checkpoint}')

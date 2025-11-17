@@ -16,6 +16,7 @@ MAX_PIXELS=400000 \
   --sft_type lora \
   --tuner_backend peft \
   --dtype bf16 \
+  --deepspeed swift/llm/ds_config/zero2.json \
   --output_dir output \
   --train_dataset_sample -1 \
   --dataset_test_ratio 0 \

@@ -1,8 +1,8 @@
 # Use $2 if provided, otherwise use environment variable CUDA_VISIBLE_DEVICES
 # Set memory optimization: expandable_segments to reduce fragmentation
-CUDA_VISIBLE_DEVICES=${2:-${CUDA_VISIBLE_DEVICES:-0}} \
+CUDA_VISIBLE_DEVICES=${2:-${CUDA_VISIBLE_DEVICES:-1}} \
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-MAX_PIXELS=400000 \
+MAX_PIXELS=300000 \
   swift sft \
   --round 30 \
   --round_per_epoch 10 \
@@ -15,12 +15,12 @@ MAX_PIXELS=400000 \
   --dataset "/home/hmpiao/hmpiao/xuerong/FedMABench/android_control_unpack/episode-wise-conversations.jsonl" \
   --sft_type lora \
   --tuner_backend peft \
-  --dtype AUTO \
+  --dtype bf16 \
   --output_dir output \
   --train_dataset_sample -1 \
   --dataset_test_ratio 0 \
   --max_steps -1 \
-  --max_length 2048 \
+  --max_length 1024 \
   --check_dataset_strategy warning \
   --lora_rank 8 \
   --lora_alpha 32 \

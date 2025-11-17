@@ -31,7 +31,10 @@ echo "[INFO] Setting CUDA_VISIBLE_DEVICES=$GPU_IDS"
 # 导出环境变量，确保在Python启动前设置
 export CUDA_VISIBLE_DEVICES=$GPU_IDS
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export MAX_PIXELS=400000
+# ⚠️ 重要：减少MAX_PIXELS以降低激活值显存占用
+# device_map='auto'只分布模型参数，不分布激活值
+# Visual层的激活值会在GPU 0上累积，需要减少图像分辨率
+export MAX_PIXELS=200000  # 从400000减少到200000，减少激活值显存
 
 # 验证环境变量
 echo "[INFO] Verifying CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
@@ -57,7 +60,7 @@ swift sft \
   --train_dataset_sample -1 \
   --dataset_test_ratio 0 \
   --max_steps -1 \
-  --max_length 2048 \
+  --max_length 1024 \
   --check_dataset_strategy warning \
   --lora_rank 8 \
   --lora_alpha 32 \
@@ -66,7 +69,7 @@ swift sft \
   --batch_size 1 \
   --weight_decay 0.1 \
   --learning_rate 5e-5 \
-  --gradient_accumulation_steps 8 \
+  --gradient_accumulation_steps 16 \
   --max_grad_norm 0.5 \
   --warmup_ratio 0.03 \
   --eval_strategy no \

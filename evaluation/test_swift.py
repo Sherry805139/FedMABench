@@ -22,27 +22,15 @@ def judge_step(a, b):
 
 def calculate_step_accuracy(data):
     """
-    计算步骤级准确率：将 response 和 label 按行分割，逐行比较每个动作步骤。
-    返回每个步骤的准确性列表 [1, 0, 1, ...]。
+    计算每一行的准确率，判断每一行的 label 和 response 是否一致。
+    返回每行的准确性列表 [1, 0, 1, ...]。
     """
     step_accuracies = []
     for item in data:
-        # 将 response 和 label 按行分割成步骤列表
-        response_steps = [step.strip() for step in item['response'].split('\n') if step.strip()]
-        label_steps = [step.strip() for step in item['label'].split('\n') if step.strip()]
-        
-        # 逐步骤比较，取较短的序列长度
-        min_len = min(len(response_steps), len(label_steps))
-        if min_len == 0:
-            continue
-            
-        # 对每个步骤进行比较
-        for i in range(min_len):
-            # 跳过 "Check status: successful" 这类状态检查步骤
-            if 'Check status' in response_steps[i] or 'Check status' in label_steps[i]:
-                continue
-            step_accuracies.append(judge_step(label_steps[i], response_steps[i]))
-    
+        # 如果 label 和 response 相同，认为是相关的
+        if item['label'] != 'Click at a button':
+            step_accuracies.append(judge_step(item['label'], item['response']))
+
     return step_accuracies
 
 

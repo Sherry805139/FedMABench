@@ -2,7 +2,7 @@
 
 # 配置基础路径 - 根据您的实际路径修改
 # 如果脚本在项目根目录运行，使用相对路径；如果在服务器上，使用绝对路径
-base_path=./output
+base_path=./output/qwen2-vl-2b-instruct
 # base_path=/data1/hmpiao/xuerong/FedMABench/output  # 服务器上的路径示例
 
 # 模型配置 - 根据您的训练配置修改

@@ -59,7 +59,7 @@ for round in ${round_list[@]}; do
                 fi
             fi
             
-            MAX_PIXELS=602112 CUDA_VISIBLE_DEVICES=$1 swift infer \
+            MAX_PIXELS=200000 CUDA_VISIBLE_DEVICES=$1 swift infer \
               --ckpt_dir "$ckpt_dir" \
               --val_dataset "$val_dataset" \
               --model_type $model \

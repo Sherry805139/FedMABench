@@ -49,13 +49,34 @@ def calculate_episode_accuracy(data, step_accuracies=None):
     # 按照 query 对数据进行分组
     for item in data:
         query = item['query']
+        
+        # 尝试提取 User Instruction（如果格式是 ### User Instruction ###\n...\n###）
         match = re.search(r'### User Instruction ###\n(.*?)\n###', query, re.DOTALL)
-
         if match:
             query = match.group(1).strip()  # 提取 User Instruction 部分并去除首尾空格
-            # print(user_instruction)
         else:
-            print("No User Instruction found.")
+            # 如果没有找到标准格式，尝试提取 <image> 标签后的指令部分
+            # 格式通常是: <image>\n<image>\n...\n指令内容
+            lines = query.split('\n')
+            # 找到第一个不是 <image> 的行，作为指令开始
+            instruction_lines = []
+            found_instruction = False
+            for line in lines:
+                line_stripped = line.strip()
+                if line_stripped == '<image>' or line_stripped == '':
+                    continue
+                # 找到第一个非空且不是 <image> 的行，后面的都是指令
+                found_instruction = True
+                instruction_lines.append(line)
+            
+            if instruction_lines:
+                # 合并所有指令行
+                query = '\n'.join(instruction_lines).strip()
+            # 如果还是找不到，就使用原始 query（去掉开头的 <image> 标签）
+            if not query or query == item['query']:
+                # 移除所有 <image> 行，保留其他内容
+                query = '\n'.join([line for line in lines if line.strip() != '<image>']).strip()
+        
         if query not in episodes:
             episodes[query] = []
         episodes[query].append(item)

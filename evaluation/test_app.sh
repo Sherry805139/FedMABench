@@ -41,8 +41,22 @@ for round in ${round_list[@]}; do
             # 检查验证数据集是否存在
             if [ ! -f "$val_dataset" ]; then
                 echo "Error: Validation dataset $val_dataset not found!"
-                echo "Please provide the correct path to your validation dataset."
+                echo ""
+                echo "提示: 如果您的数据格式是原始episode格式（包含img、instruction、acts_convert等字段），"
+                echo "      请先使用转换脚本转换为推理格式："
+                echo "      python evaluation/convert_to_inference_format.py --input <原始文件> --output $val_dataset"
+                echo ""
                 continue
+            fi
+            
+            # 检查数据格式（简单检查）
+            first_line=$(head -n 1 "$val_dataset" 2>/dev/null)
+            if [ -n "$first_line" ]; then
+                if echo "$first_line" | grep -q '"img"'; then
+                    echo "警告: 检测到原始格式（包含'img'字段），需要转换为推理格式"
+                    echo "      请运行: python evaluation/convert_to_inference_format.py --input $val_dataset --output <输出文件>"
+                    continue
+                fi
             fi
             
             MAX_PIXELS=602112 CUDA_VISIBLE_DEVICES=$1 swift infer \

@@ -16,7 +16,7 @@ round_list=(5 10 15 20 25 30)
 # 验证数据集路径 - 需要您提供实际的验证数据集路径
 # 格式应该是jsonl文件，每行包含images、query、label等字段
 # 示例路径（请根据实际情况修改）：
-val_dataset=./data/Basic-AC/Val_100.jsonl
+val_dataset=./Val_100.jsonl
 
 peft_list=(
 v31-20251117-220840

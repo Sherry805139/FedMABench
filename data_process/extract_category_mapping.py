@@ -38,30 +38,84 @@ def extract_app_names_from_data(jsonl_path):
     """从数据中提取所有出现的app_name"""
     app_names = set()
     episode_to_app = {}
+    error_count = 0
+    sample_episode = None
     
     print(f"Reading data from {jsonl_path}...")
+    if not Path(jsonl_path).exists():
+        print(f"ERROR: File not found: {jsonl_path}")
+        return app_names, episode_to_app
+    
     with open(jsonl_path, 'r', encoding='utf-8') as f:
-        for line in tqdm(f):
+        for line_num, line in enumerate(tqdm(f, desc="Processing episodes")):
+            if line_num == 0:
+                # 保存第一行用于调试
+                sample_episode = line[:500] if len(line) > 500 else line
+            
             try:
                 episode = json.loads(line)
                 episode_id = episode.get('episode_id', '')
+                
+                # 检查字段是否存在
+                if 'acts_origin' not in episode:
+                    if line_num < 3:
+                        print(f"\nWarning: Line {line_num+1} missing 'acts_origin' field")
+                        print(f"Available fields: {list(episode.keys())}")
+                    continue
+                
                 acts_origin = episode.get('acts_origin', [])
                 
+                if not isinstance(acts_origin, list):
+                    if line_num < 3:
+                        print(f"\nWarning: Line {line_num+1} 'acts_origin' is not a list: {type(acts_origin)}")
+                    continue
+                
                 # 从acts_origin中提取app_name
-                for act_str in acts_origin:
+                found_app = False
+                for act_idx, act_str in enumerate(acts_origin):
                     try:
-                        act = json.loads(act_str) if isinstance(act_str, str) else act_str
-                        if act.get('action_type') == 'open_app':
+                        # 尝试解析JSON字符串
+                        if isinstance(act_str, str):
+                            act = json.loads(act_str)
+                        else:
+                            act = act_str
+                        
+                        if isinstance(act, dict) and act.get('action_type') == 'open_app':
                             app_name = act.get('app_name', '')
                             if app_name:
                                 app_names.add(app_name)
-                                                # 记录每个episode对应的app（使用第一个open_app）
+                                # 记录每个episode对应的app（使用第一个open_app）
                                 if episode_id not in episode_to_app:
-                                    episode_to_app[episode_id] = app_name.lower()  # 转换为小写以匹配映射
-                    except:
+                                    episode_to_app[episode_id] = app_name.lower()
+                                    found_app = True
+                                    break
+                    except json.JSONDecodeError as e:
+                        if line_num < 3 and act_idx < 2:
+                            print(f"\nWarning: Line {line_num+1}, act {act_idx} JSON decode error: {e}")
+                            print(f"  Act string (first 100 chars): {str(act_str)[:100]}")
                         continue
-            except:
-                continue
+                    except Exception as e:
+                        if line_num < 3:
+                            print(f"\nWarning: Line {line_num+1}, act {act_idx} error: {e}")
+                        continue
+                
+            except json.JSONDecodeError as e:
+                error_count += 1
+                if error_count <= 3:
+                    print(f"\nERROR: Line {line_num+1} JSON decode error: {e}")
+                    print(f"  Line preview (first 200 chars): {line[:200]}")
+            except Exception as e:
+                error_count += 1
+                if error_count <= 3:
+                    print(f"\nERROR: Line {line_num+1} unexpected error: {e}")
+                    print(f"  Error type: {type(e).__name__}")
+    
+    if sample_episode:
+        print(f"\nSample first line (first 500 chars):")
+        print(sample_episode)
+    
+    if error_count > 0:
+        print(f"\nTotal errors encountered: {error_count}")
     
     return app_names, episode_to_app
 

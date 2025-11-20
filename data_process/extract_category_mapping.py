@@ -4,6 +4,7 @@
 """
 import json
 import argparse
+import re
 from collections import defaultdict
 from pathlib import Path
 from tqdm import tqdm
@@ -34,6 +35,64 @@ APP_TO_CATEGORY_MAPPING = {
 CATEGORIES = ["Shopping", "Traveling", "Office", "Lives", "Entertainment"]
 
 
+def extract_app_name_from_conversations(conversations):
+    """从conversations中提取app_name
+    方法1: 从assistant的value中提取 "Open App: <app_name>"
+    方法2: 如果方法1失败，从user的value中提取 "xxx app" 或 "xxx App"
+    """
+    if not isinstance(conversations, list):
+        return None
+    
+    app_name = None
+    
+    # 方法1: 查找assistant的回复中的"Open App"
+    for msg in conversations:
+        if isinstance(msg, dict) and msg.get('from') == 'assistant':
+            value = msg.get('value', '')
+            if isinstance(value, str):
+                # 匹配 "Open App: <app_name>" 模式
+                match = re.search(r'Open App:\s*([^\n]+)', value, re.IGNORECASE)
+                if match:
+                    app_name = match.group(1).strip()
+                    return app_name
+    
+    # 方法2: 如果assistant中没有，尝试从user的instruction中提取
+    if not app_name:
+        for msg in conversations:
+            if isinstance(msg, dict) and msg.get('from') == 'user':
+                value = msg.get('value', '')
+                if isinstance(value, str):
+                    # 匹配 "xxx app" 或 "xxx App" 模式（不区分大小写）
+                    # 匹配模式：单词 + "app"（可能有大写）
+                    patterns = [
+                        r'(\w+(?:\s+\w+)*?)\s+app\b',  # "xxx app"
+                        r'(\w+(?:\s+\w+)*?)\s+App\b',  # "xxx App"
+                        r'app\s+(\w+(?:\s+\w+)*?)\b',  # "app xxx"
+                        r'App\s+(\w+(?:\s+\w+)*?)\b',  # "App xxx"
+                        r'the\s+(\w+(?:\s+\w+)*?)\s+app',  # "the xxx app"
+                        r'in\s+the\s+(\w+(?:\s+\w+)*?)\s+app',  # "in the xxx app"
+                        r'on\s+the\s+(\w+(?:\s+\w+)*?)\s+app',  # "on the xxx app"
+                        r'using\s+the\s+(\w+(?:\s+\w+)*?)\s+app',  # "using the xxx app"
+                        r'by\s+using\s+the\s+(\w+(?:\s+\w+)*?)\s+app',  # "by using the xxx app"
+                    ]
+                    
+                    for pattern in patterns:
+                        match = re.search(pattern, value, re.IGNORECASE)
+                        if match:
+                            app_name = match.group(1).strip()
+                            # 过滤掉一些常见的误匹配
+                            if app_name.lower() not in ['the', 'a', 'an', 'this', 'that', 'file', 'manager']:
+                                return app_name
+                    
+                    # 特殊处理：匹配 "xxx.com app" 或 "xxx app"（带点）
+                    match = re.search(r'(\w+(?:\.\w+)*)\s+app\b', value, re.IGNORECASE)
+                    if match:
+                        app_name = match.group(1).strip()
+                        return app_name
+    
+    return app_name
+
+
 def extract_app_names_from_data(jsonl_path):
     """从数据中提取所有出现的app_name"""
     app_names = set()
@@ -56,48 +115,34 @@ def extract_app_names_from_data(jsonl_path):
                 episode = json.loads(line)
                 episode_id = episode.get('episode_id', '')
                 
-                # 检查字段是否存在
-                if 'acts_origin' not in episode:
-                    if line_num < 3:
-                        print(f"\nWarning: Line {line_num+1} missing 'acts_origin' field")
-                        print(f"Available fields: {list(episode.keys())}")
-                    continue
+                # 方法1: 尝试从conversations中提取（新格式）
+                app_name = None
+                if 'conversations' in episode:
+                    app_name = extract_app_name_from_conversations(episode.get('conversations', []))
                 
-                acts_origin = episode.get('acts_origin', [])
+                # 方法2: 如果conversations中没有，尝试从acts_origin中提取（旧格式）
+                if not app_name and 'acts_origin' in episode:
+                    acts_origin = episode.get('acts_origin', [])
+                    if isinstance(acts_origin, list):
+                        for act_str in acts_origin:
+                            try:
+                                if isinstance(act_str, str):
+                                    act = json.loads(act_str)
+                                else:
+                                    act = act_str
+                                
+                                if isinstance(act, dict) and act.get('action_type') == 'open_app':
+                                    app_name = act.get('app_name', '')
+                                    if app_name:
+                                        break
+                            except:
+                                continue
                 
-                if not isinstance(acts_origin, list):
-                    if line_num < 3:
-                        print(f"\nWarning: Line {line_num+1} 'acts_origin' is not a list: {type(acts_origin)}")
-                    continue
-                
-                # 从acts_origin中提取app_name
-                found_app = False
-                for act_idx, act_str in enumerate(acts_origin):
-                    try:
-                        # 尝试解析JSON字符串
-                        if isinstance(act_str, str):
-                            act = json.loads(act_str)
-                        else:
-                            act = act_str
-                        
-                        if isinstance(act, dict) and act.get('action_type') == 'open_app':
-                            app_name = act.get('app_name', '')
-                            if app_name:
-                                app_names.add(app_name)
-                                # 记录每个episode对应的app（使用第一个open_app）
-                                if episode_id not in episode_to_app:
-                                    episode_to_app[episode_id] = app_name.lower()
-                                    found_app = True
-                                    break
-                    except json.JSONDecodeError as e:
-                        if line_num < 3 and act_idx < 2:
-                            print(f"\nWarning: Line {line_num+1}, act {act_idx} JSON decode error: {e}")
-                            print(f"  Act string (first 100 chars): {str(act_str)[:100]}")
-                        continue
-                    except Exception as e:
-                        if line_num < 3:
-                            print(f"\nWarning: Line {line_num+1}, act {act_idx} error: {e}")
-                        continue
+                # 如果找到了app_name，记录它
+                if app_name:
+                    app_names.add(app_name)
+                    if episode_id not in episode_to_app:
+                        episode_to_app[episode_id] = app_name.lower()
                 
             except json.JSONDecodeError as e:
                 error_count += 1

@@ -165,21 +165,60 @@ def extract_app_names_from_data(jsonl_path):
     return app_names, episode_to_app
 
 
+def normalize_app_name(app_name):
+    """规范化app名称，用于匹配"""
+    if not app_name:
+        return ""
+    # 转换为小写，去除多余空格
+    normalized = app_name.lower().strip()
+    # 移除常见的后缀
+    normalized = re.sub(r'\s+app$', '', normalized)
+    normalized = re.sub(r'\s+application$', '', normalized)
+    return normalized
+
+
+def find_category_for_app(app_name, app_to_category_mapping):
+    """查找app对应的category，支持多种匹配方式"""
+    if not app_name:
+        return None
+    
+    # 方法1: 直接匹配（原始大小写）
+    if app_name in app_to_category_mapping:
+        return app_to_category_mapping[app_name]
+    
+    # 方法2: 小写匹配
+    app_lower = app_name.lower()
+    if app_lower in app_to_category_mapping:
+        return app_to_category_mapping[app_lower]
+    
+    # 方法3: 规范化匹配（去除"app"后缀等）
+    normalized = normalize_app_name(app_name)
+    if normalized in app_to_category_mapping:
+        return app_to_category_mapping[normalized]
+    
+    # 方法4: 部分匹配（如果app_name包含映射表中的key）
+    for mapped_app, category in app_to_category_mapping.items():
+        if normalized in mapped_app.lower() or mapped_app.lower() in normalized:
+            return category
+    
+    return None
+
+
 def create_category_mapping(episode_to_app, app_to_category_mapping, output_path):
     """创建episode_id到category的映射文件"""
     episode_to_category = {}
-    unmapped_apps = set()
+    unmapped_apps = defaultdict(int)  # 统计未映射的app出现次数
     
     for episode_id, app_name in episode_to_app.items():
-        # 尝试直接匹配，也尝试小写匹配
-        category = app_to_category_mapping.get(app_name) or app_to_category_mapping.get(app_name.lower())
+        category = find_category_for_app(app_name, app_to_category_mapping)
+        
         if category:
             episode_to_category[episode_id] = {
                 "app_name": app_name,
                 "category": category
             }
         else:
-            unmapped_apps.add(app_name)
+            unmapped_apps[app_name] += 1
             # 如果没有映射，标记为Unknown
             episode_to_category[episode_id] = {
                 "app_name": app_name,
@@ -203,10 +242,15 @@ def create_category_mapping(episode_to_app, app_to_category_mapping, output_path
         print(f"  {cat}: {count} episodes")
     
     if unmapped_apps:
-        print(f"\n⚠️  Warning: {len(unmapped_apps)} apps without category mapping:")
-        for app in sorted(unmapped_apps):
-            print(f"  - {app}")
-        print("\nPlease update APP_TO_CATEGORY_MAPPING in this script.")
+        print(f"\n⚠️  Warning: {len(unmapped_apps)} unique apps without category mapping:")
+        print(f"Total unmapped episodes: {sum(unmapped_apps.values())}")
+        print("\nTop 50 unmapped apps (by frequency):")
+        for app, count in sorted(unmapped_apps.items(), key=lambda x: -x[1])[:50]:
+            print(f"  - {app} ({count} episodes)")
+        if len(unmapped_apps) > 50:
+            print(f"  ... and {len(unmapped_apps) - 50} more apps")
+        print("\n💡 Tip: You can add these apps to app_to_category_mapping.json")
+        print("   Or check if they need normalization (e.g., 'File Manager' vs 'file manager app')")
     
     return episode_to_category
 

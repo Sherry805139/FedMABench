@@ -93,8 +93,28 @@ def extract_app_name_from_conversations(conversations):
     return app_name
 
 
+def extract_app_name_from_goal(goal):
+    """从goal字段中使用正则表达式提取app名称（策略2）"""
+    if not goal or not isinstance(goal, str):
+        return None
+    
+    # 使用正则表达式匹配 "the xxx app" 模式
+    pattern = re.compile(r'\bthe\s+(\w+(?:\s+\w+)?)\s+app\b', re.IGNORECASE)
+    match = pattern.search(goal)
+    
+    if match:
+        app_name = match.group(1).strip()
+        return app_name
+    
+    return None
+
+
 def extract_app_names_from_data(jsonl_path):
-    """从数据中提取所有出现的app_name"""
+    """从数据中提取所有出现的app_name
+    使用双策略方法：
+    策略1: 如果actions中包含"open_app"动作，直接从app_name字段提取并清理
+    策略2: 如果没有open_app动作，从goal字段使用正则表达式提取
+    """
     app_names = set()
     episode_to_app = {}
     error_count = 0
@@ -114,14 +134,11 @@ def extract_app_names_from_data(jsonl_path):
             try:
                 episode = json.loads(line)
                 episode_id = episode.get('episode_id', '')
-                
-                # 方法1: 尝试从conversations中提取（新格式）
                 app_name = None
-                if 'conversations' in episode:
-                    app_name = extract_app_name_from_conversations(episode.get('conversations', []))
                 
-                # 方法2: 如果conversations中没有，尝试从acts_origin中提取（旧格式）
-                if not app_name and 'acts_origin' in episode:
+                # 策略1: 检查actions中是否有"open_app"动作
+                # 首先尝试从acts_origin中提取（旧格式）
+                if 'acts_origin' in episode:
                     acts_origin = episode.get('acts_origin', [])
                     if isinstance(acts_origin, list):
                         for act_str in acts_origin:
@@ -134,9 +151,21 @@ def extract_app_names_from_data(jsonl_path):
                                 if isinstance(act, dict) and act.get('action_type') == 'open_app':
                                     app_name = act.get('app_name', '')
                                     if app_name:
+                                        # 清理字符串，去除BOM字符等
+                                        app_name = app_name.replace('\ufeff', '').strip()
                                         break
                             except:
                                 continue
+                
+                # 如果策略1失败，尝试策略2: 从goal字段提取
+                if not app_name:
+                    goal = episode.get('goal') or episode.get('instruction')
+                    if goal:
+                        app_name = extract_app_name_from_goal(goal)
+                
+                # 如果策略1和策略2都失败，尝试从conversations中提取（新格式，作为后备）
+                if not app_name and 'conversations' in episode:
+                    app_name = extract_app_name_from_conversations(episode.get('conversations', []))
                 
                 # 如果找到了app_name，记录它
                 if app_name:

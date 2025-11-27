@@ -65,13 +65,16 @@ for model_cat in "${CATEGORIES[@]}"; do
             echo "Model: $model_cat, Test: $data_cat, Round: $round"
             echo "=========================================="
 
-            ckpt_dir="$BASE_OUTPUT_DIR/category_lora_${model_lower}/global_lora_$round"
+            # 查找对应round的checkpoint目录（兼容嵌套结构，如 qwen2-vl-2b-instruct/v0-xxx/global_lora_$round）
+            ckpt_dir_candidates=$(find "$BASE_OUTPUT_DIR/category_lora_${model_lower}" -type d -name "global_lora_$round" 2>/dev/null | sort)
+            ckpt_dir=$(echo "$ckpt_dir_candidates" | tail -n 1)
 
-            # 检查checkpoint目录是否存在
-            if [ ! -d "$ckpt_dir" ]; then
-                echo "[WARNING] Checkpoint directory $ckpt_dir does not exist, skipping..."
+            if [ -z "$ckpt_dir" ] || [ ! -d "$ckpt_dir" ]; then
+                echo "[WARNING] No checkpoint directory found for round $round under $BASE_OUTPUT_DIR/category_lora_${model_lower}, skipping..."
                 continue
             fi
+
+            echo "[INFO] Using checkpoint directory: $ckpt_dir"
 
             infer_dir="$ckpt_dir/infer_result"
             combo_dir="$infer_dir/${data_lower}"

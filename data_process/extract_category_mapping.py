@@ -157,9 +157,11 @@ def extract_app_names_from_data(jsonl_path):
                             except:
                                 continue
                 
-                # 如果策略1失败，尝试策略2: 从goal字段提取
+                # 如果策略1失败，尝试策略2: 从文本goal/instruction/query字段提取
                 if not app_name:
-                    goal = episode.get('goal') or episode.get('instruction')
+                    # 训练集是 episode-wise 格式时，一般有 goal/instruction
+                    # 推理/验证集 (Val_100.jsonl) 是 query 字段
+                    goal = episode.get('goal') or episode.get('instruction') or episode.get('query')
                     if goal:
                         app_name = extract_app_name_from_goal(goal)
                 

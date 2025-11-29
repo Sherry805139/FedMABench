@@ -37,7 +37,7 @@ for model_cat in "${CATEGORIES[@]}"; do
 
     for data_cat in "${CATEGORIES[@]}"; do
         data_lower=$(echo "$data_cat" | tr '[:upper:]' '[:lower:]')
-        test_file="$TEST_DATA_DIR/${data_lower}_train.jsonl"
+        test_file="$TEST_DATA_DIR/${data_lower}_val_infer.jsonl"
 
         echo ""
         echo "##########################################"

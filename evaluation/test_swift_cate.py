@@ -37,8 +37,26 @@ def calculate_step_accuracy(data, category_mapping):
 
     for item in data:
         # 提取 episode 号
-        image_path = item.get("images", "")
-        episode_id = image_path.split("/")[-2]  # 假设 episode 号是倒数第二级文件夹
+        # 推理结果中常见的字段：images / image / img / imgs
+        image_path = (
+            item.get("images")
+            or item.get("image")
+            or item.get("img")
+            or item.get("imgs")
+            or ""
+        )
+
+        # 兼容Qwen等模型将 images 存成列表的情况
+        if isinstance(image_path, list):
+            image_path = image_path[0] if image_path else ""
+
+        # 此时 image_path 应该是字符串: ".../<episode_id>/<step>.png"
+        episode_id = ""
+        if isinstance(image_path, str) and image_path:
+            try:
+                episode_id = image_path.split("/")[-2]  # 假设 episode 号是倒数第二级文件夹
+            except Exception:
+                episode_id = ""
 
         # 计算 step 级别的准确性
         if item['label'] != 'Click at a button':

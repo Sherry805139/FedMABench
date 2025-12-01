@@ -33,6 +33,17 @@ export CUDA_VISIBLE_DEVICES=$GPU_ID
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MAX_PIXELS=200000
 
+# 汇总结果到一个简单的 txt，放在 ./output 下
+SUMMARY_FILE="$BASE_OUTPUT_DIR/category_lora_val100_summary.txt"
+mkdir -p "$BASE_OUTPUT_DIR"
+{
+  echo "Category LoRA Val_100 Evaluation Summary"
+  echo "========================================"
+  echo "Val dataset: $VAL_DATASET"
+  echo "Round: $ROUND"
+  echo ""
+} > "$SUMMARY_FILE"
+
 for model_cat in "${CATEGORIES[@]}"; do
   model_lower=$(echo "$model_cat" | tr '[:upper:]' '[:lower:]')
 
@@ -96,10 +107,19 @@ for model_cat in "${CATEGORIES[@]}"; do
   for jsonl_file in $jsonl_files; do
     echo "[INFO] Processing: $jsonl_file"
     base_name="$(basename "$jsonl_file" .jsonl)"
+    # 详细评测结果仍保存在各自的 infer_result 子目录，便于排查
     output_file="$combo_dir/${base_name}_val100_model-${model_lower}_result.txt"
 
     python evaluation/test_swift.py --data_path "$jsonl_file" > "$output_file" 2>&1
     echo "[INFO] Val_100 result saved to: $output_file"
+
+    # 从评测结果中提取 Step-level accuracy，汇总到 ./output/category_lora_val100_summary.txt
+    acc_line=$(grep "Step-level accuracy" "$output_file" | head -n 1)
+    if [ -n "$acc_line" ]; then
+      echo "Model LoRA: ${model_cat}, Val_100 -> ${acc_line}" >> "$SUMMARY_FILE"
+    else
+      echo "Model LoRA: ${model_cat}, Val_100 -> [WARN] No Step-level accuracy line found" >> "$SUMMARY_FILE"
+    fi
   done
 done
 
@@ -107,6 +127,8 @@ echo ""
 echo "=========================================="
 echo "Category LoRA evaluation on Val_100 completed!"
 echo "=========================================="
+
+echo "[INFO] Summary saved to: $SUMMARY_FILE"
 
 
 

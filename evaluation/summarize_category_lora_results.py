@@ -8,17 +8,22 @@ ROUND_LIST = [5, 10, 15, 20, 25, 30]
 
 
 def extract_metrics_from_file(path: Path) -> str:
-    """从单个 *_result.txt 文件中抽取关键信息，返回用于写入 summary 的短文本。"""
+    """从单个 *_result.txt 文件中抽取关键信息，返回用于写入 summary 的短文本。
+
+    按你的需求，这里只保留整体的 Step-level accuracy，
+    不再展示各个 Category 的细粒度准确率。
+    """
     if not path.is_file():
         return ""
 
     lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     selected = []
     for line in lines:
-        if "Step-level accuracy" in line or "Category-level step accuracy" in line or "Category " in line:
+        # 只保留整体 step-level accuracy
+        if "Step-level accuracy" in line:
             selected.append(line)
-    # 只保留前几行，避免太长
-    return "\n".join(selected[:10])
+
+    return "\n".join(selected[:1])
 
 
 def summarize(base_output_dir: Path, summary_file: Path):

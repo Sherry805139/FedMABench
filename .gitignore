@@ -161,3 +161,4 @@ bash/output/
 evaluation/all-MiniLM-L6-v2/
 FedMABench.pdf
 *.md
+*.pdf

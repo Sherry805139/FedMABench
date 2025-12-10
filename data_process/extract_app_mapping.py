@@ -75,22 +75,6 @@ def extract_app_name_from_conversations(conversations):
     return app_name
 
 
-def extract_app_name_from_goal(goal):
-    """从 goal 字段中使用正则表达式提取 app 名称"""
-    if not goal or not isinstance(goal, str):
-        return None
-
-    # 使用正则表达式匹配 "the xxx app" 模式
-    pattern = re.compile(r"\bthe\s+(\w+(?:\s+\w+)?)\s+app\b", re.IGNORECASE)
-    match = pattern.search(goal)
-
-    if match:
-        app_name = match.group(1).strip()
-        return app_name
-
-    return None
-
-
 def normalize_app_name(app_name):
     """规范化 app 名称，用于后续按 app 分组和文件命名"""
     if not app_name:
@@ -105,9 +89,9 @@ def normalize_app_name(app_name):
 
 def extract_app_names_from_data(jsonl_path):
     """从数据中提取所有 episode_id 到 app_name 的映射
-    使用双策略方法：
-    策略1: 如果 actions 中包含 "open_app" 动作，直接从 app_name 字段提取并清理
-    策略2: 如果没有 open_app 动作，从 goal/instruction/query 或 conversations 中提取
+    （简化版本）只使用 conversations 信息进行提取：
+    - 优先从 assistant 的 "Open App: <app_name>" 中获取
+    - 否则从 user 文本里的 "xxx app" / "App xxx" 等 pattern 中获取
     """
     app_names = set()
     episode_to_app = {}
@@ -130,44 +114,8 @@ def extract_app_names_from_data(jsonl_path):
                 episode_id = episode.get("episode_id", "")
                 app_name = None
 
-                # 策略1: 检查 actions 中是否有 "open_app" 动作
-                # 首先尝试从 acts_origin 中提取（旧格式）
-                if "acts_origin" in episode:
-                    acts_origin = episode.get("acts_origin", [])
-                    if isinstance(acts_origin, list):
-                        for act_str in acts_origin:
-                            try:
-                                if isinstance(act_str, str):
-                                    act = json.loads(act_str)
-                                else:
-                                    act = act_str
-
-                                if (
-                                    isinstance(act, dict)
-                                    and act.get("action_type") == "open_app"
-                                ):
-                                    app_name = act.get("app_name", "")
-                                    if app_name:
-                                        # 清理字符串，去除 BOM 字符等
-                                        app_name = app_name.replace("\ufeff", "").strip()
-                                        break
-                            except Exception:
-                                continue
-
-                # 如果策略1失败，尝试策略2: 从文本 goal/instruction/query 字段提取
-                if not app_name:
-                    # 训练集是 episode-wise 格式时，一般有 goal/instruction
-                    # 推理/验证集 (Val_100.jsonl) 是 query 字段
-                    goal = (
-                        episode.get("goal")
-                        or episode.get("instruction")
-                        or episode.get("query")
-                    )
-                    if goal:
-                        app_name = extract_app_name_from_goal(goal)
-
-                # 如果策略1和策略2都失败，尝试从 conversations 中提取（新格式，作为后备）
-                if not app_name and "conversations" in episode:
+                # 只使用 conversations 信息提取 app_name
+                if "conversations" in episode:
                     app_name = extract_app_name_from_conversations(
                         episode.get("conversations", [])
                     )

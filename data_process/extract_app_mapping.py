@@ -10,6 +10,19 @@ from pathlib import Path
 from tqdm import tqdm
 
 
+# 只保留和训练相关的 8 个目标 app
+TARGET_APPS = [
+    "amazon",
+    "ebay",
+    "flipkart",
+    "gmail",
+    "clock",
+    "google drive",
+    "reminder",
+    "youtube",
+]
+
+
 def extract_app_name_from_conversations(conversations):
     """从 conversations 中提取 app_name
     方法1: 从 assistant 的 value 中提取 "Open App: <app_name>"
@@ -84,14 +97,45 @@ def normalize_app_name(app_name):
     # 移除常见的后缀
     normalized = re.sub(r"\s+app$", "", normalized)
     normalized = re.sub(r"\s+application$", "", normalized)
+    # 去掉开头的 in / in the / on the / at the 等前缀
+    normalized = re.sub(
+        r"^(in|on|at)\s+the\s+", "", normalized
+    )  # in the xxx / on the xxx
+    normalized = re.sub(r"^(in|on|at)\s+", "", normalized)  # in xxx / on xxx
     return normalized
 
 
+def map_to_target_app(app_name):
+    """将提取到的 app_name 映射到 8 个目标 app 之一
+    如果无法映射，则返回 None（该 episode 将被丢弃）
+    """
+    if not app_name:
+        return None
+    norm = normalize_app_name(app_name)
+    if not norm:
+        return None
+
+    # 直接相等
+    for target in TARGET_APPS:
+        if norm == target:
+            return target
+
+    # 模糊匹配：norm 包含 target，或者 target 包含 norm
+    for target in TARGET_APPS:
+        if target in norm:
+            return target
+
+    return None
+
+
 def extract_app_names_from_data(jsonl_path):
-    """从数据中提取所有 episode_id 到 app_name 的映射
-    （简化版本）只使用 conversations 信息进行提取：
-    - 优先从 assistant 的 "Open App: <app_name>" 中获取
-    - 否则从 user 文本里的 "xxx app" / "App xxx" 等 pattern 中获取
+    """从数据中提取所有 episode_id 到 app_name 的映射（只保留 8 个目标 app）
+    - 只使用 conversations 信息进行提取：
+      - 优先从 assistant 的 "Open App: <app_name>" 中获取
+      - 否则从 user 文本里的 "xxx app" / "App xxx" 等 pattern 中获取
+    - 然后将提取到的 app_name 映射到 [amazon, ebay, flipkart, gmail,
+      clock, google drive, reminder, youtube] 这 8 个 app 之一
+    - 只有能映射到这 8 个 app 的 episode 才会被保留
     """
     app_names = set()
     episode_to_app = {}
@@ -120,12 +164,17 @@ def extract_app_names_from_data(jsonl_path):
                         episode.get("conversations", [])
                     )
 
-                # 如果找到了 app_name，记录它
+                # 如果找到了 app_name，尝试映射到目标 app
+                target_app = None
                 if app_name:
-                    app_names.add(app_name)
+                    target_app = map_to_target_app(app_name)
+
+                # 只保留成功映射到 8 个目标 app 的 episode
+                if target_app:
+                    app_names.add(target_app)
                     episode_to_app[episode_id] = {
-                        "app_name": app_name,
-                        "normalized_app_name": normalize_app_name(app_name),
+                        "app_name": app_name,  # 原始提取到的名称（方便调试）
+                        "normalized_app_name": target_app,  # 归一化为 8 个目标 app 之一
                     }
 
             except json.JSONDecodeError as e:

@@ -29,7 +29,7 @@ echo "[INFO] Output base directory: $OUTPUT_BASE_DIR"
 # 导出环境变量
 export CUDA_VISIBLE_DEVICES=$GPU_IDS
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export MAX_PIXELS=200000
+export MAX_PIXELS=400000
 
 # 检查category数据目录是否存在
 if [ ! -d "$CATEGORY_DATA_DIR" ]; then

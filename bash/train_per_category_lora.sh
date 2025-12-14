@@ -5,9 +5,7 @@
 
 # 配置参数
 GPU_IDS=${1:-"0"}
-BASE_DATASET="/home/hmpiao/hmpiao/xuerong/FedMABench/android_control_unpack/episode-wise-conversations.jsonl"
-CATEGORY_DATA_DIR="./data_by_category"
-CATEGORY_MAPPING_FILE="./episode_category_mapping.json"
+CATEGORY_DATA_DIR="./data/Basic-AC-conv"
 MODEL_TYPE="qwen2-vl-2b-instruct"
 MODEL_PATH="/home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct"
 OUTPUT_BASE_DIR="./output"
@@ -24,7 +22,7 @@ fi
 # 计算GPU数量
 GPU_COUNT=$(echo "$GPU_IDS" | tr ',' '\n' | wc -l)
 echo "[INFO] Using GPUs: $GPU_IDS (Model Parallelism, $GPU_COUNT GPUs)"
-echo "[INFO] Base dataset: $BASE_DATASET"
+echo "[INFO] Base dataset: $CATEGORY_DATA_DIR"
 echo "[INFO] Category data directory: $CATEGORY_DATA_DIR"
 echo "[INFO] Output base directory: $OUTPUT_BASE_DIR"
 
@@ -42,9 +40,8 @@ fi
 
 # 为每个category训练LoRA
 for category in "${CATEGORIES[@]}"; do
-    category_lower=$(echo "$category" | tr '[:upper:]' '[:lower:]')
-    category_dataset="$CATEGORY_DATA_DIR/${category_lower}_train.jsonl"
-    output_dir="$OUTPUT_BASE_DIR/category_lora_${category_lower}"
+    category_dataset="$CATEGORY_DATA_DIR/Basic-AC ${category}.jsonl"
+    output_dir="$OUTPUT_BASE_DIR/category_lora_${category}"
     
     echo ""
     echo "=========================================="

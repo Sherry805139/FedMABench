@@ -12,7 +12,7 @@ from tqdm import tqdm
 def load_app_mapping(app_mapping_file):
     """加载 episode_id 到 app_name 的映射
 
-    支持两种格式：
+    支持三种格式：
     1）新脚本生成的 episode_app_mapping.json：
        {
          "episode_to_app": {
@@ -29,11 +29,21 @@ def load_app_mapping(app_mapping_file):
          "<episode_id>": "app_name",
          ...
        }
+    3）val_split.json 这种带有 app_name 等字段的映射：
+       {
+         "<episode_id>": {
+           "app_name": "amazon",
+           "episode_number": 4,
+           "goal_word_count": 13,
+           "category": 1
+         },
+         ...
+       }
     """
     with open(app_mapping_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # 情况1：包含 "episode_to_app" 顶层键（推荐）
+    # 情况1：包含 "episode_to_app" 顶层键（推荐，对应格式1）
     if isinstance(data, dict) and "episode_to_app" in data:
         mapping = data["episode_to_app"]
         episode_to_app = {}
@@ -46,10 +56,14 @@ def load_app_mapping(app_mapping_file):
             episode_to_app[ep_id] = app_name
         return episode_to_app
 
-    # 情况2：直接是 episode_id -> app_name
+    # 情况2 & 3：没有 "episode_to_app" 顶层键
+    # - 如果 value 是 dict 且包含 app_name/normalized_app_name（对应格式2的 dict 版本或 val_split.json 格式3），
+    #   则从中取 app_name 相关字段；
+    # - 否则直接把 value 转成字符串（对应格式2的纯字符串版本）。
     episode_to_app = {}
     for ep_id, v in data.items():
         if isinstance(v, dict):
+            # 优先 normalized_app_name，其次 app_name（val_split.json 中只有 app_name）
             app_name = v.get("normalized_app_name") or v.get("app_name", "Unknown")
         else:
             app_name = str(v)

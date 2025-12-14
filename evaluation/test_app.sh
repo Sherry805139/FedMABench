@@ -1,87 +1,149 @@
 #!/bin/bash
+# 在按app划分的多个测试集上评估所有app的LoRA模型（7x7组合）
+# 使用方法: bash evaluation/test_app.sh [GPU_ID] [TEST_DATA_DIR]
+# 例如: bash evaluation/test_app.sh 0 ./test_data_by_app
 
-# 配置基础路径 - 根据您的实际路径修改
-# 如果脚本在项目根目录运行，使用相对路径；如果在服务器上，使用绝对路径
-base_path=./output/qwen2-vl-2b-instruct
-# base_path=/data1/hmpiao/xuerong/FedMABench/output  # 服务器上的路径示例
+# 配置参数
+GPU_ID=${1:-0}
+TEST_DATA_DIR=${2:-"./test_data_by_app"}
+BASE_OUTPUT_DIR="./lora_app"
+MODEL_TYPE="qwen2-vl-2b-instruct"
+MODEL_PATH="/home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct"
 
-# 模型配置 - 根据您的训练配置修改
-model=qwen2-vl-2b-instruct
-model_id_or_path=/home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct
-# 如果模型路径不同，请修改上面的路径
+# Apps from Table 5（同时作为LoRA类别和测试集类别）
+APPS=("amazon" "ebay" "flipkart" "gmail" "clock" "reminder" "youtube")
 
-# 要测试的轮次列表
-round_list=(5 10 15 20 25 30)
+# 要测试的轮次（checkpoint）
+ROUND_LIST=(30)
 
-# 验证数据集路径 - 需要您提供实际的验证数据集路径
-# 格式应该是jsonl文件，每行包含images、query、label等字段
-# 示例路径（请根据实际情况修改）：
-val_dataset=./Val_100.jsonl
+echo "[INFO] Testing all app LoRAs on app-wise test sets in: $TEST_DATA_DIR"
+echo "[INFO] Using GPU: $GPU_ID"
+echo "[INFO] Base output directory: $BASE_OUTPUT_DIR"
 
-peft_list=(
-v31-20251117-220840
-)
+# 检查测试数据目录是否存在
+if [ ! -d "$TEST_DATA_DIR" ]; then
+    echo "[ERROR] Test data directory not found: $TEST_DATA_DIR"
+    exit 1
+fi
 
-for round in ${round_list[@]}; do  
-    for i in ${peft_list[@]}; do
-        echo "Testing round $round with $i"
-        
-        # 检查checkpoint目录是否存在
-        ckpt_dir="$base_path/$i/global_lora_$round"
-        if [ ! -d "$ckpt_dir" ]; then
-            echo "Warning: Checkpoint directory $ckpt_dir does not exist, skipping..."
+export CUDA_VISIBLE_DEVICES=$GPU_ID
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export MAX_PIXELS=600000
+
+# 为每个LoRA app、每个测试集 app 和 round 30 进行推理和评估（7x7组合）
+for model_app in "${APPS[@]}"; do
+    model_root="$BASE_OUTPUT_DIR/app_lora_${model_app}"
+
+    if [ ! -d "$model_root" ]; then
+        echo "[WARNING] Model directory not found for app $model_app: $model_root"
+        continue
+    fi
+
+    for data_app in "${APPS[@]}"; do
+        test_file="$TEST_DATA_DIR/${data_app}_train.jsonl"
+
+        echo ""
+        echo "##########################################"
+        echo "Model LoRA: $model_app  |  Test Set: $data_app"
+        echo "##########################################"
+
+        # 检查测试集是否存在
+        if [ ! -f "$test_file" ]; then
+            echo "[WARNING] Test dataset not found for app $data_app: $test_file"
             continue
         fi
-        
-        # 检查是否已有推理结果
-        jsonl_files=$(find "$ckpt_dir/infer_result" -type f -name "*.jsonl" 2>/dev/null)
 
-        if [ -z "$jsonl_files" ]; then
-            echo "Running inference for round $round..."
-            # 检查验证数据集是否存在
-            if [ ! -f "$val_dataset" ]; then
-                echo "Error: Validation dataset $val_dataset not found!"
-                echo ""
-                echo "提示: 如果您的数据格式是原始episode格式（包含img、instruction、acts_convert等字段），"
-                echo "      请先使用转换脚本转换为推理格式："
-                echo "      python evaluation/convert_to_inference_format.py --input <原始文件> --output $val_dataset"
-                echo ""
+        # 简单检查是否为推理格式（不包含\"img\"字段）
+        first_line=$(head -n 1 "$test_file" 2>/dev/null)
+        if [ -n "$first_line" ] && echo "$first_line" | grep -q '"img"'; then
+            echo "[ERROR] Detected original episode format in $test_file (contains 'img' or 'imgs')."
+            echo "       Please convert to inference format first, for example:"
+            echo "       python evaluation/convert_to_inference_format.py --input $test_file --output ${test_file%.jsonl}_infer.jsonl"
+            continue
+        fi
+
+        for round in "${ROUND_LIST[@]}"; do
+            echo ""
+            echo "=========================================="
+            echo "Model: $model_app, Test: $data_app, Round: $round"
+            echo "=========================================="
+
+            # 查找对应round的checkpoint目录（兼容嵌套结构，如 qwen2-vl-2b-instruct/v0-xxx/global_lora_$round）
+            ckpt_dir_candidates=$(find "$model_root" -type d -name "global_lora_$round" 2>/dev/null | sort)
+            ckpt_dir=$(echo "$ckpt_dir_candidates" | tail -n 1)
+
+            if [ -z "$ckpt_dir" ] || [ ! -d "$ckpt_dir" ]; then
+                echo "[WARNING] No checkpoint directory found for app $model_app, round $round under $model_root, skipping..."
                 continue
             fi
-            
-            # 检查数据格式（简单检查）
-            first_line=$(head -n 1 "$val_dataset" 2>/dev/null)
-            if [ -n "$first_line" ]; then
-                if echo "$first_line" | grep -q '"img"'; then
-                    echo "警告: 检测到原始格式（包含'img'字段），需要转换为推理格式"
-                    echo "      请运行: python evaluation/convert_to_inference_format.py --input $val_dataset --output <输出文件>"
+
+            echo "[INFO] Using checkpoint directory: $ckpt_dir"
+
+            infer_dir="$ckpt_dir/infer_result"
+            combo_dir="$infer_dir/${data_app}"
+
+            mkdir -p "$infer_dir"
+
+            # 如果该组合已经有推理结果，则跳过推理
+            existing_jsonl=$(find "$combo_dir" -type f -name "*.jsonl" 2>/dev/null | head -n 1)
+            if [ -z "$existing_jsonl" ]; then
+                echo "[INFO] Running inference for model $model_app on test set $data_app, round $round..."
+
+                # 清理顶层旧的jsonl（保留子目录）
+                find "$infer_dir" -maxdepth 1 -type f -name "*.jsonl" -delete
+
+                # 运行推理
+                swift infer \
+                  --ckpt_dir "$ckpt_dir" \
+                  --val_dataset "$test_file" \
+                  --model_type $MODEL_TYPE \
+                  --model_id_or_path $MODEL_PATH \
+                  --sft_type lora
+
+                if [ $? -ne 0 ]; then
+                    echo "[ERROR] Inference failed for model $model_app on test set $data_app, round $round"
                     continue
                 fi
-            fi
-            
-            MAX_PIXELS=200000 CUDA_VISIBLE_DEVICES=$1 swift infer \
-              --ckpt_dir "$ckpt_dir" \
-              --val_dataset "$val_dataset" \
-              --model_type $model \
-              --model_id_or_path $model_id_or_path \
-              --sft_type lora
-        else
-            echo "Inference results already exist, skipping inference step."
-        fi
 
-        # 计算准确率
-        jsonl_files=$(find "$ckpt_dir/infer_result" -type f -name "*.jsonl" 2>/dev/null)
-        if [ -z "$jsonl_files" ]; then
-            echo "Warning: No inference results found in $ckpt_dir/infer_result"
-            continue
-        fi
-        
-        for jsonl_file in $jsonl_files; do
-            echo "Processing: $jsonl_file"
-            output_file="$ckpt_dir/infer_result/$(basename $jsonl_file .jsonl)_result.txt"
-            # 使用test_swift.py进行评估（如果test_swift_fed.py不存在）
-            python evaluation/test_swift.py --data_path "$jsonl_file" > "$output_file" 2>&1
-            echo "Results saved to: $output_file"
+                mkdir -p "$combo_dir"
+                # 将本次生成的jsonl移动到对应子目录
+                new_jsonl_files=$(find "$infer_dir" -maxdepth 1 -type f -name "*.jsonl" 2>/dev/null)
+                for f in $new_jsonl_files; do
+                    mv "$f" "$combo_dir"/
+                done
+            else
+                echo "[INFO] Inference results already exist for model $model_app on test set $data_app, round $round, skipping inference."
+            fi
+
+            # 计算准确率
+            jsonl_files=$(find "$combo_dir" -type f -name "*.jsonl" 2>/dev/null)
+            if [ -z "$jsonl_files" ]; then
+                echo "[WARNING] No inference results found in $combo_dir"
+                continue
+            fi
+
+            for jsonl_file in $jsonl_files; do
+                echo "[INFO] Processing: $jsonl_file"
+                base_name="$(basename "$jsonl_file" .jsonl)"
+                output_file="$combo_dir/${base_name}_model-${model_app}_data-${data_app}_result.txt"
+
+                # 使用test_swift.py进行评估（step-level / episode-level）
+                python evaluation/test_swift.py --data_path "$jsonl_file" > "$output_file" 2>&1
+
+                echo "[INFO] Results saved to: $output_file"
+            done
         done
     done
 done
+
+echo ""
+echo "=========================================="
+echo "All app LoRA evaluation (7x7 combinations) completed!"
+echo "=========================================="
+
+# 汇总结果到 lora_app 目录下
+echo ""
+echo "Generating summary report for app LoRA evaluation..."
+python evaluation/summarize_app_lora_results.py \
+  --base_output_dir "$BASE_OUTPUT_DIR" \
+  --summary_file "$BASE_OUTPUT_DIR/app_lora_summary.txt"

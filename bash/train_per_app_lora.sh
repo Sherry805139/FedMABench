@@ -40,7 +40,7 @@ fi
 
 # 为每个app训练LoRA
 for app in "${APPS[@]}"; do
-    app_dataset="$APP_DATA_DIR/Basic-AC ${app}.jsonl"
+    app_dataset="$APP_DATA_DIR/${app}_train.jsonl"
     output_dir="$OUTPUT_BASE_DIR/app_lora_${app}"
     
     echo ""

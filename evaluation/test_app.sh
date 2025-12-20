@@ -11,7 +11,8 @@ MODEL_TYPE="qwen2-vl-2b-instruct"
 MODEL_PATH="/home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct"
 
 # Apps from Table 5（同时作为LoRA类别和测试集类别）
-APPS=("amazon" "ebay" "flipkart" "gmail" "clock" "reminder" "youtube")
+APPS=("youtube")
+APPS_=("amazon" "ebay" "flipkart" "gmail" "clock" "reminder" "youtube")
 
 # 要测试的轮次（checkpoint）
 ROUND_LIST=(30)
@@ -39,7 +40,7 @@ for model_app in "${APPS[@]}"; do
         continue
     fi
 
-    for data_app in "${APPS[@]}"; do
+    for data_app in "${APPS_[@]}"; do
         test_file="$TEST_DATA_DIR/${data_app}_train.jsonl"
 
         echo ""

@@ -11,7 +11,8 @@ MODEL_PATH="/home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct"
 OUTPUT_BASE_DIR="./lora_app"
 
 # APPS from Table 5
-APPS=("amazon" "ebay" "flipkart" "gmail" "clock" "reminder" "youtube")
+# APPS=("amazon" "ebay" "flipkart" "gmail" "clock" "reminder" "youtube")
+APPS=("youtube")
 
 # 验证GPU IDs格式
 if [[ ! "$GPU_IDS" =~ ^[0-9]+(,[0-9]+)*$ ]]; then

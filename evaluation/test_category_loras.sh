@@ -6,7 +6,7 @@
 # 配置参数
 GPU_ID=${1:-0}
 TEST_DATA_DIR=${2:-"./test_data_by_category"}
-BASE_OUTPUT_DIR="./output"
+BASE_OUTPUT_DIR="./lora_category"
 MODEL_TYPE="qwen2-vl-2b-instruct"
 MODEL_PATH="/home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct"
 CATEGORY_MAPPING_FILE="./episode_category_mapping.json"
@@ -15,7 +15,7 @@ CATEGORY_MAPPING_FILE="./episode_category_mapping.json"
 CATEGORIES=("Shopping" "Traveling" "Office" "Lives" "Entertainment")
 
 # 要测试的轮次（checkpoint）
-ROUND_LIST=(5 10 15 20 25 30)
+ROUND_LIST=(30)
 
 echo "[INFO] Testing all category LoRAs on category-wise test sets in: $TEST_DATA_DIR"
 echo "[INFO] Using GPU: $GPU_ID"
@@ -31,7 +31,7 @@ export CUDA_VISIBLE_DEVICES=$GPU_ID
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MAX_PIXELS=200000
 
-# 为每个LoRA category、每个测试集category和每个round进行推理和评估（5x5组合）
+# 为每个LoRA category、每个测试集category和round 30进行推理和评估（5x5组合）
 for model_cat in "${CATEGORIES[@]}"; do
     model_lower=$(echo "$model_cat" | tr '[:upper:]' '[:lower:]')
 
@@ -145,46 +145,12 @@ echo "=========================================="
 echo "All category LoRA evaluation (5x5 combinations) completed!"
 echo "=========================================="
 
-# 汇总结果
+# 汇总结果（使用 Python 脚本，兼容嵌套的 global_lora_* 目录）
 echo ""
-echo "Generating summary report..."
-summary_file="$BASE_OUTPUT_DIR/category_lora_summary.txt"
-{
-    echo "Category LoRA Evaluation Summary"
-    echo "================================"
-    echo "Test Data Directory: $TEST_DATA_DIR"
-    echo "Date: $(date)"
-    echo ""
-    
-    for model_cat in "${CATEGORIES[@]}"; do
-        model_lower=$(echo "$model_cat" | tr '[:upper:]' '[:lower:]')
-        echo "Model LoRA Category: $model_cat"
-        echo "--------------------------------"
-
-        for data_cat in "${CATEGORIES[@]}"; do
-            data_lower=$(echo "$data_cat" | tr '[:upper:]' '[:lower:]')
-            echo "  Test Set Category: $data_cat"
-
-            for round in "${ROUND_LIST[@]}"; do
-                ckpt_dir="$BASE_OUTPUT_DIR/category_lora_${model_lower}/global_lora_$round"
-                combo_dir="$ckpt_dir/infer_result/${data_lower}"
-                result_files=$(find "$combo_dir" -name "*_result.txt" 2>/dev/null)
-
-                if [ -n "$result_files" ]; then
-                    echo "    Round $round:"
-                    for result_file in $result_files; do
-                        echo "      $(basename "$result_file"):"
-                        grep -E "(Step-level accuracy|Category.*accuracy)" "$result_file" | head -10 | sed 's/^/        /'
-                    done
-                fi
-            done
-            echo ""
-        done
-        echo ""
-    done
-} > "$summary_file"
-
-echo "[INFO] Summary report saved to: $summary_file"
+echo "Generating summary report with Python summarizer..."
+python evaluation/summarize_category_lora_results.py \
+  --base_output_dir "$BASE_OUTPUT_DIR" \
+  --summary_file "$BASE_OUTPUT_DIR/category_lora_summary.txt"
 
 
 

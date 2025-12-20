@@ -11,7 +11,8 @@ MODEL_PATH="/home/hmpiao/hmpiao/Qwen2-VL-2B-Instruct"
 OUTPUT_BASE_DIR="./lora_category"
 
 # Categories from Table 5
-CATEGORIES=("Shopping" "Traveling" "Office" "Lives" "Entertainment")
+# CATEGORIES=("Shopping" "Traveling" "Office" "Lives" "Entertainment")
+CATEGORIES=("Traveling")
 
 # 验证GPU IDs格式
 if [[ ! "$GPU_IDS" =~ ^[0-9]+(,[0-9]+)*$ ]]; then

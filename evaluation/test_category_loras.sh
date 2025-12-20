@@ -33,7 +33,6 @@ export MAX_PIXELS=200000
 
 # 为每个LoRA category、每个测试集category和round 30进行推理和评估（5x5组合）
 for model_cat in "${CATEGORIES[@]}"; do
-    model_lower=$(echo "$model_cat" | tr '[:upper:]' '[:lower:]')
 
     for data_cat in "${CATEGORIES[@]}"; do
         data_lower=$(echo "$data_cat" | tr '[:upper:]' '[:lower:]')
@@ -66,11 +65,11 @@ for model_cat in "${CATEGORIES[@]}"; do
             echo "=========================================="
 
             # 查找对应round的checkpoint目录（兼容嵌套结构，如 qwen2-vl-2b-instruct/v0-xxx/global_lora_$round）
-            ckpt_dir_candidates=$(find "$BASE_OUTPUT_DIR/category_lora_${model_lower}" -type d -name "global_lora_$round" 2>/dev/null | sort)
+            ckpt_dir_candidates=$(find "$BASE_OUTPUT_DIR/category_lora_${model_cat}" -type d -name "global_lora_$round" 2>/dev/null | sort)
             ckpt_dir=$(echo "$ckpt_dir_candidates" | tail -n 1)
 
             if [ -z "$ckpt_dir" ] || [ ! -d "$ckpt_dir" ]; then
-                echo "[WARNING] No checkpoint directory found for round $round under $BASE_OUTPUT_DIR/category_lora_${model_lower}, skipping..."
+                echo "[WARNING] No checkpoint directory found for round $round under $BASE_OUTPUT_DIR/category_lora_${model_cat}, skipping..."
                 continue
             fi
 
@@ -122,7 +121,7 @@ for model_cat in "${CATEGORIES[@]}"; do
             for jsonl_file in $jsonl_files; do
                 echo "[INFO] Processing: $jsonl_file"
                 base_name="$(basename "$jsonl_file" .jsonl)"
-                output_file="$combo_dir/${base_name}_model-${model_lower}_data-${data_lower}_result.txt"
+                output_file="$combo_dir/${base_name}_model-${model_cat}_data-${data_lower}_result.txt"
 
                 # 使用test_swift_cate.py进行评估（按category统计）
                 if [ -f "$CATEGORY_MAPPING_FILE" ]; then
